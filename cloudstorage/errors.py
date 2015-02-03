@@ -4,11 +4,10 @@ __author__ = 'krakover'
 
 
 class GoogleCloudStorageError(Exception):
-
     # pylint: disable=R0911
     @staticmethod
     def create(error, server_error, error_ls, job_ref=None):
-        """Returns a GoogleCloudStorageError for the JSON error that's embedded in the server error response.
+        """Returns a BigQueryError for the JSON error that's embedded in the server error response.
 
         If error_ls contains any errors other than the given one, those are also included in the
         return message.
@@ -35,18 +34,30 @@ class GoogleCloudStorageError(Exception):
             message += '\n'.join(textwrap.fill(': '.join(filter(None, [err.get('location', None), err.get('message', '')])), initial_indent=' - ', subsequent_indent='   ') for err in new_errors)
 
         if not reason or not message:
-            return GoogleCloudStorageError('Error reported by server with missing error fields. ' 'Server returned: %s' % (str(server_error),))
+            return GoogleCloudStorageInterfaceError('Error reported by server with missing error fields. ' 'Server returned: %s' % (str(server_error),))
 
         if reason == 'authError':
             return GoogleCloudStorageAuthorizationError(message)
 
-        # We map the less interesting errors to GoogleCloudStorageServiceError.
+        # BigQueryServiceError derivatives
+
+        if reason == 'Not Found':
+            return GoogleCloudStorageNotFoundError(message, error, error_ls, job_ref=job_ref)
+        if reason == 'Forbidden':
+            return GoogleCloudStorageAuthorizationError(message, error, error_ls, job_ref=job_ref)
+        if reason == 'accessDenied':
+            return GoogleCloudStorageServiceError(message, error, error_ls, job_ref=job_ref)
+        if reason == 'backendError':
+            return GoogleCloudStorageBackendError(message, error, error_ls, job_ref=job_ref)
+
+        # We map the less interesting errors to BigQueryServiceError.
         return GoogleCloudStorageServiceError(message, error, error_ls, job_ref=job_ref)
 
 
 class GoogleCloudStorageAuthorizationError(GoogleCloudStorageError):
-    """401 error wrapper"""
+    """403 error wrapper"""
     pass
+
 
 class GoogleCloudStorageNotFoundError(GoogleCloudStorageError):
     """404 error wrapper"""
@@ -54,4 +65,12 @@ class GoogleCloudStorageNotFoundError(GoogleCloudStorageError):
 
 
 class GoogleCloudStorageServiceError(GoogleCloudStorageError):
+    pass
+
+
+class GoogleCloudStorageBackendError(GoogleCloudStorageError):
+    pass
+
+
+class GoogleCloudStorageInterfaceError(GoogleCloudStorageError):
     pass
