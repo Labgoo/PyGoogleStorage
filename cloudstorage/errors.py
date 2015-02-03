@@ -48,6 +48,10 @@ class GoogleCloudStorageAuthorizationError(GoogleCloudStorageError):
     """401 error wrapper"""
     pass
 
+class GoogleCloudStorageNotFoundError(GoogleCloudStorageError):
+    """404 error wrapper"""
+    pass
+
 
 class GoogleCloudStorageServiceError(GoogleCloudStorageError):
     pass
