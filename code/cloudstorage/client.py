@@ -2,6 +2,7 @@ import io
 import json
 import os
 import logging
+
 from googleapiclient import model, http
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -10,7 +11,9 @@ import httplib2
 from oauth2client import gce
 from oauth2client.appengine import AppAssertionCredentials
 from oauth2client.file import Storage
-from errors import GoogleCloudStorageAuthorizationError, GoogleCloudStorageError, GoogleCloudStorageNotFoundError
+
+from code.cloudstorage.errors import GoogleCloudStorageAuthorizationError, GoogleCloudStorageError
+
 
 __author__ = 'krakover'
 
@@ -38,10 +41,10 @@ class GoogleCloudStorageHttp(http.HttpRequest):
         self._model = http_model
 
     @staticmethod
-    def factory(model):
+    def factory(storage_model):
         """Returns a function that creates a CloudStorageHttp with the given model."""
         def _create_cloudstorage_http_request(*args, **kwargs):
-            captured_model = model
+            captured_model = storage_model
             return GoogleCloudStorageHttp(captured_model, *args, **kwargs)
 
         return _create_cloudstorage_http_request
@@ -50,7 +53,6 @@ class GoogleCloudStorageHttp(http.HttpRequest):
         try:
             return super(GoogleCloudStorageHttp, self).execute(**kwargs)
         except HttpError, e:
-            # TODO(user): Remove this when apiclient supports logging of error responses.
             self._model._log_response(e.resp, e.content)
 
             if e.resp.get('content-type', '').startswith('application/json'):
@@ -145,34 +147,30 @@ class GoogleCloudStorageClient(object):
         raise GoogleCloudStorageAuthorizationError('No Credentials provided')
 
     def get_http_for_request(self):
-        http = httplib2.Http()
-        http = self.credentials.authorize(http)
-        self.credentials.refresh(http)
+        _http = httplib2.Http()
+        _http = self.credentials.authorize(_http)
+        self.credentials.refresh(_http)
 
-        return http
+        return _http
 
     @staticmethod
     def is_in_appengine():
-        'SERVER_SOFTWARE' in os.environ and os.environ['SERVER_SOFTWARE'].startswith('Google App Engine/')
+        return 'SERVER_SOFTWARE' in os.environ and os.environ['SERVER_SOFTWARE'].startswith('Google App Engine/')
 
     @staticmethod
     def is_in_gce_machine():
         try:
             metadata_uri = 'http://metadata.google.internal'
-            http = httplib2.Http()
-            http.request(metadata_uri, method='GET')
+            _http = httplib2.Http()
+            _http.request(metadata_uri, method='GET')
             return True
         except httplib2.ServerNotFoundError:
             return False
 
     @property
     def api_client(self):
-        http = self.get_http_for_request()
+        _http = self.get_http_for_request()
         cloudstorage_model = GoogleCloudStorageModel(trace=self.trace)
         cloudstorage_http = GoogleCloudStorageHttp.factory(cloudstorage_model)
 
-        return build("storage", "v1", http=http, model=cloudstorage_model, requestBuilder=cloudstorage_http)
-
-
-print GoogleCloudStorageClient(oauth_credentails_file='/Users/neta/_dev/Wondermall-Events-Agents/code/credentials.json').read_file_metadata('wondermall-1dev.appspot.com',
-                    'third-party/proxybonanza/proxylist.csv')
+        return build("storage", "v1", http=_http, model=cloudstorage_model, requestBuilder=cloudstorage_http)

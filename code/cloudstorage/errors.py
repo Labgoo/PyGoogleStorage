@@ -44,7 +44,7 @@ class GoogleCloudStorageError(Exception):
         if reason == 'rateLimitExceeded':
             return GoogleCloudStorageRateLimitExceededError(message, error, error_ls, job_ref=job_ref)
         if reason == 'dailyLimitExceeded':
-            return GoogleCloudStorageDailyLimitExceededError(message, error, error_ls, job_ref=job_ref) 
+            return GoogleCloudStorageDailyLimitExceededError(message, error, error_ls, job_ref=job_ref)
         if reason == 'accessDenied':
             return GoogleCloudStorageServiceError(message, error, error_ls, job_ref=job_ref)
         if reason == 'backendError':
