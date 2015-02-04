@@ -1,0 +1,3 @@
+[submodule "libs/PyGoogleServices"]
+	path = libs/PyGoogleServices
+	url = https://github.com/Labgoo/PyGoogleServices.git

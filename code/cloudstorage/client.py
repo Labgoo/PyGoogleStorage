@@ -1,19 +1,13 @@
 import io
 import json
-import os
-import logging
 
 from googleapiclient import model, http
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 import httplib2
-from oauth2client import gce
-from oauth2client.appengine import AppAssertionCredentials
-from oauth2client.file import Storage
-
-from code.cloudstorage.errors import GoogleCloudStorageAuthorizationError, GoogleCloudStorageError
-
+from googleservices.utils import get_google_credentials
+from googleservices.errors import GoogleCloudError
 
 __author__ = 'krakover'
 
@@ -58,9 +52,9 @@ class GoogleCloudStorageHttp(http.HttpRequest):
             if e.resp.get('content-type', '').startswith('application/json'):
                 result = json.loads(e.content)
                 error = result.get('error', {}).get('errors', [{}])[0]
-                raise GoogleCloudStorageError.create(error, result, [])
+                raise GoogleCloudError.create(error, result, [])
             else:
-                raise GoogleCloudStorageError(
+                raise GoogleCloudError(
                     ('Could not connect with Google Cloud Storage server.\n'
                      'Http response status: %s\n'
                      'Http response content:\n%s') % (e.resp.get('status', '(unexpected)'), e.content))
@@ -115,36 +109,9 @@ class GoogleCloudStorageClient(object):
 
     @property
     def credentials(self):
-        if self._credentials:
-            return self._credentials
-
-        if self.use_jwt_credentials_auth:  # Local debugging using pem file
-            scope = 'https://www.googleapis.com/auth/devstorage.read_write'
-            from oauth2client.client import SignedJwtAssertionCredentials
-            credentials = SignedJwtAssertionCredentials(self.jwt_account_name, self.jwt_key_func(), scope=scope)
-            logging.info("Using Standard jwt authentication")
-            self._credentials = self._credentials
-            return credentials
-        elif self.is_in_appengine():  # App engine
-            scope = 'https://www.googleapis.com/auth/devstorage.read_write'
-            credentials = AppAssertionCredentials(scope=scope)
-            logging.info("Using Standard appengine authentication")
-            self._credentials = self._credentials
-            return credentials
-        elif self.oauth_credentails_file:  # Local oauth token
-            storage = Storage(self.oauth_credentails_file)
-            credentials = storage.get()
-            if not credentials:
-                raise GoogleCloudStorageAuthorizationError('No credential file present')
-            logging.info("Using Standard OAuth authentication")
-            self._credentials = self._credentials
-            return credentials
-        elif self.is_in_gce_machine():  # GCE authorization
-            credentials = gce.AppAssertionCredentials('')
-            logging.info("Using GCE authentication")
-            self._credentials = self._credentials
-            return credentials
-        raise GoogleCloudStorageAuthorizationError('No Credentials provided')
+        if not self._credentials:
+            self._credentials = get_google_credentials(self.use_jwt_credentials_auth, self.jwt_account_name, self.jwt_key_func, self.oauth_credentails_file)
+        return self._credentials
 
     def get_http_for_request(self):
         _http = httplib2.Http()
@@ -152,20 +119,6 @@ class GoogleCloudStorageClient(object):
         self.credentials.refresh(_http)
 
         return _http
-
-    @staticmethod
-    def is_in_appengine():
-        return 'SERVER_SOFTWARE' in os.environ and os.environ['SERVER_SOFTWARE'].startswith('Google App Engine/')
-
-    @staticmethod
-    def is_in_gce_machine():
-        try:
-            metadata_uri = 'http://metadata.google.internal'
-            _http = httplib2.Http()
-            _http.request(metadata_uri, method='GET')
-            return True
-        except httplib2.ServerNotFoundError:
-            return False
 
     @property
     def api_client(self):
