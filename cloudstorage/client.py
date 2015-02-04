@@ -31,7 +31,7 @@ class GoogleCloudStorageModel(model.JsonModel):
 
 # pylint: disable=E1002
 class GoogleCloudStorageHttp(http.HttpRequest):
-    """Converts errors into BigQuery errors."""
+    """Converts errors into CloudStorage errors."""
 
     def __init__(self, http_model, *args, **kwargs):
         super(GoogleCloudStorageHttp, self).__init__(*args, **kwargs)
@@ -39,12 +39,12 @@ class GoogleCloudStorageHttp(http.HttpRequest):
 
     @staticmethod
     def factory(model):
-        """Returns a function that creates a BigQueryHttp with the given model."""
-        def _create_bigquery_http_request(*args, **kwargs):
+        """Returns a function that creates a CloudStorageHttp with the given model."""
+        def _create_cloudstorage_http_request(*args, **kwargs):
             captured_model = model
             return GoogleCloudStorageHttp(captured_model, *args, **kwargs)
 
-        return _create_bigquery_http_request
+        return _create_cloudstorage_http_request
 
     def execute(self, **kwargs):
         try:
@@ -58,14 +58,6 @@ class GoogleCloudStorageHttp(http.HttpRequest):
                 error = result.get('error', {}).get('errors', [{}])[0]
                 raise GoogleCloudStorageError.create(error, result, [])
             else:
-                if e.resp.reason == 'Not Found':
-                    raise GoogleCloudStorageNotFoundError(e.resp.reason)
-                if e.resp.status == 404:
-                    raise GoogleCloudStorageNotFoundError(e.resp.reason)
-                if e.resp.reason == 'Forbidden':
-                    raise GoogleCloudStorageAuthorizationError(e.resp.reason)
-                if e.resp.status == 403:
-                    raise GoogleCloudStorageAuthorizationError(e.resp.reason)
                 raise GoogleCloudStorageError(
                     ('Could not connect with Google Cloud Storage server.\n'
                      'Http response status: %s\n'
@@ -90,6 +82,8 @@ class GoogleCloudStorageClient(object):
     def read_file(self, bucket_name, file_name):
         return self.objects().get_media(bucket=bucket_name, object=file_name).execute()
 
+    def read_file_metadata(self, bucket_name, file_name):
+        return self.objects().get(bucket=bucket_name, object=file_name).execute()
 
     def write_file(self, bucket_name, file_name, content, content_type):
         media = MediaIoBaseUpload(io.BytesIO(content), content_type)
@@ -123,14 +117,14 @@ class GoogleCloudStorageClient(object):
             return self._credentials
 
         if self.use_jwt_credentials_auth:  # Local debugging using pem file
-            scope = 'https://www.googleapis.com/auth/bigquery'
+            scope = 'https://www.googleapis.com/auth/devstorage.read_write'
             from oauth2client.client import SignedJwtAssertionCredentials
             credentials = SignedJwtAssertionCredentials(self.jwt_account_name, self.jwt_key_func(), scope=scope)
             logging.info("Using Standard jwt authentication")
             self._credentials = self._credentials
             return credentials
         elif self.is_in_appengine():  # App engine
-            scope = 'https://www.googleapis.com/auth/bigquery'
+            scope = 'https://www.googleapis.com/auth/devstorage.read_write'
             credentials = AppAssertionCredentials(scope=scope)
             logging.info("Using Standard appengine authentication")
             self._credentials = self._credentials
@@ -178,3 +172,7 @@ class GoogleCloudStorageClient(object):
         cloudstorage_http = GoogleCloudStorageHttp.factory(cloudstorage_model)
 
         return build("storage", "v1", http=http, model=cloudstorage_model, requestBuilder=cloudstorage_http)
+
+
+print GoogleCloudStorageClient(oauth_credentails_file='/Users/neta/_dev/Wondermall-Events-Agents/code/credentials.json').read_file_metadata('wondermall-1dev.appspot.com',
+                    'third-party/proxybonanza/proxylist.csv')
